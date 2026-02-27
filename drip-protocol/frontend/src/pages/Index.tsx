@@ -7,7 +7,10 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/component
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { StreamVisualization } from "@/components/StreamVisualization";
 import { ThemePreview } from "@/components/ThemePreview";
+import { NetworkAlert } from "@/components/NetworkAlert";
 import { useState } from "react";
+import { useProtocolStats } from "@/hooks/use-protocol-stats";
+import { useWallet } from "@/contexts/WalletContext";
 
 const FEATURES = [
   { icon: Zap, title: "Real-Time Payments", desc: "Bitcoin streams continuously, block by block" },
@@ -30,12 +33,6 @@ const USE_CASES = [
   { icon: Lock, title: "Token Vesting", short: "Fair, transparent token distribution for investors and teams.", detail: "Replace complex vesting contracts with simple streams. Tokens vest linearly with full on-chain transparency, and unvested tokens can be reclaimed if needed." },
   { icon: Palette, title: "Creator Economy", short: "Subscription payments that flow in real-time.", detail: "Fans stream payments to creators continuously. No more monthly billing cycles — creators earn as they create, and subscribers only pay for the time they're subscribed." },
   { icon: Landmark, title: "DAO Treasury", short: "Programmable treasury disbursements for DAOs.", detail: "Stream grants and contributor payments from DAO treasuries. Governance can cancel streams if milestones aren't met, maintaining accountability with on-chain proof." },
-];
-
-const PROTOCOL_STATS = [
-  { value: 142.85, decimals: 2, suffix: " sBTC", label: "Total Streamed" },
-  { value: 47, decimals: 0, suffix: "", label: "Active Streams" },
-  { value: 1250, decimals: 0, suffix: "+", label: "Transactions" },
 ];
 
 const TRUST_BADGES = [
@@ -75,6 +72,17 @@ const FOOTER_LINKS = {
 const viewportOnce = { once: true, margin: "-50px" as any };
 
 export default function Index() {
+  // Fetch real protocol statistics from the blockchain
+  const { totalStreamed, activeStreams, totalTransactions, loading, error } = useProtocolStats();
+  const { connected } = useWallet();
+  
+  // Build protocol stats array from real data
+  const protocolStats = [
+    { value: loading ? 0 : totalStreamed, decimals: 2, suffix: " sBTC", label: "Total Streamed" },
+    { value: loading ? 0 : activeStreams, decimals: 0, suffix: "", label: "Active Streams" },
+    { value: loading ? 0 : totalTransactions, decimals: 0, suffix: "+", label: "Transactions" },
+  ];
+  
   return (
     <div className="min-h-screen gradient-bg">
       {/* Hero */}
@@ -111,7 +119,7 @@ export default function Index() {
             transition={{ duration: 0.5, delay: 0.3 }}
             className="grid grid-cols-3 gap-4 sm:gap-8 mb-10 max-w-md sm:max-w-none mx-auto"
           >
-            {PROTOCOL_STATS.map((stat) => (
+            {protocolStats.map((stat) => (
               <div key={stat.label} className="text-center">
                 <p className="text-xl sm:text-2xl md:text-3xl font-bold font-mono text-gradient-primary">
                   <AnimatedNumber value={stat.value} decimals={stat.decimals} suffix={stat.suffix} duration={1800} />
@@ -137,6 +145,18 @@ export default function Index() {
               <a href="#features">Learn More</a>
             </Button>
           </motion.div>
+
+          {/* Network Alert - only show when wallet not connected */}
+          {!connected && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.45 }}
+              className="max-w-2xl mx-auto"
+            >
+              <NetworkAlert />
+            </motion.div>
+          )}
 
           {/* Stream Visualization */}
           <motion.div

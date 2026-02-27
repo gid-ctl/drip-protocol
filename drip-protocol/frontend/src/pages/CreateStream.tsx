@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AnimatePresence, motion } from "framer-motion";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { NetworkAlert } from "@/components/NetworkAlert";
 import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -122,7 +123,8 @@ export default function CreateStream() {
   if (!connected) {
     return (
       <DashboardLayout>
-        <div className="max-w-lg mx-auto">
+        <div className="max-w-lg mx-auto space-y-6">
+          <NetworkAlert />
           <Card className="gradient-card border-border/50">
             <CardContent className="p-10 flex flex-col items-center text-center space-y-4">
               <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center">
