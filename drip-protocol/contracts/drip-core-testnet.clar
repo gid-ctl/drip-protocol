@@ -67,3 +67,45 @@
 ;; User stream indexes for STX streams
 (define-map stx-sender-streams principal (list 50 uint))
 (define-map stx-recipient-streams principal (list 50 uint))
+
+;; ============================================
+;; Private Functions
+;; ============================================
+
+;; Calculate how much has vested (unlocked) at the current block (sBTC)
+(define-private (calculate-vested-amount (stream-id uint))
+  (let (
+    (stream (unwrap! (map-get? streams stream-id) u0))
+    (total (get total-amount stream))
+    (start (get start-block stream))
+    (end (get end-block stream))
+    (current stacks-block-height)
+  )
+    (if (<= current start)
+      u0
+      (if (>= current end)
+        total
+        (/ (* total (- current start)) (- end start))
+      )
+    )
+  )
+)
+
+;; Calculate how much has vested for STX streams
+(define-private (calculate-stx-vested-amount (stream-id uint))
+  (let (
+    (stream (unwrap! (map-get? stx-streams stream-id) u0))
+    (total (get total-amount stream))
+    (start (get start-block stream))
+    (end (get end-block stream))
+    (current stacks-block-height)
+  )
+    (if (<= current start)
+      u0
+      (if (>= current end)
+        total
+        (/ (* total (- current start)) (- end start))
+      )
+    )
+  )
+)
