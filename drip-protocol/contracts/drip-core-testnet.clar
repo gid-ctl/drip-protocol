@@ -430,3 +430,57 @@
 (define-read-only (get-stream-count)
   (var-get stream-nonce)
 )
+
+;; ============================================
+;; STX Stream Read-Only Functions
+;; ============================================
+
+;; Get STX stream details
+(define-read-only (get-stx-stream (stream-id uint))
+  (map-get? stx-streams stream-id)
+)
+
+;; Get withdrawable amount for an STX stream
+(define-read-only (get-stx-withdrawable (stream-id uint))
+  (let (
+    (stream (unwrap! (map-get? stx-streams stream-id) (ok u0)))
+    (vested (calculate-stx-vested-amount stream-id))
+    (withdrawn (get withdrawn stream))
+  )
+    (ok (- vested withdrawn))
+  )
+)
+
+;; Get vested amount for an STX stream
+(define-read-only (get-stx-vested (stream-id uint))
+  (ok (calculate-stx-vested-amount stream-id))
+)
+
+;; Get STX stream progress as percentage (0-100)
+(define-read-only (get-stx-stream-progress (stream-id uint))
+  (let (
+    (stream (unwrap! (map-get? stx-streams stream-id) (ok u0)))
+    (total (get total-amount stream))
+    (vested (calculate-stx-vested-amount stream-id))
+  )
+    (if (is-eq total u0)
+      (ok u0)
+      (ok (/ (* vested u100) total))
+    )
+  )
+)
+
+;; Get all STX streams where user is sender
+(define-read-only (get-stx-outgoing-streams (user principal))
+  (default-to (list) (map-get? stx-sender-streams user))
+)
+
+;; Get all STX streams where user is recipient
+(define-read-only (get-stx-incoming-streams (user principal))
+  (default-to (list) (map-get? stx-recipient-streams user))
+)
+
+;; Get total number of STX streams created
+(define-read-only (get-stx-stream-count)
+  (var-get stx-stream-nonce)
+)
