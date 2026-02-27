@@ -376,3 +376,42 @@
     (ok { recipient-received: recipient-amount, sender-refunded: sender-refund })
   )
 )
+
+;; ============================================
+;; Read-Only Functions
+;; ============================================
+
+;; Get stream details
+(define-read-only (get-stream (stream-id uint))
+  (map-get? streams stream-id)
+)
+
+;; Get withdrawable amount for a stream
+(define-read-only (get-withdrawable (stream-id uint))
+  (let (
+    (stream (unwrap! (map-get? streams stream-id) (ok u0)))
+    (vested (calculate-vested-amount stream-id))
+    (withdrawn (get withdrawn stream))
+  )
+    (ok (- vested withdrawn))
+  )
+)
+
+;; Get vested amount for a stream
+(define-read-only (get-vested (stream-id uint))
+  (ok (calculate-vested-amount stream-id))
+)
+
+;; Get stream progress as percentage (0-100)
+(define-read-only (get-stream-progress (stream-id uint))
+  (let (
+    (stream (unwrap! (map-get? streams stream-id) (ok u0)))
+    (total (get total-amount stream))
+    (vested (calculate-vested-amount stream-id))
+  )
+    (if (is-eq total u0)
+      (ok u0)
+      (ok (/ (* vested u100) total))
+    )
+  )
+)
