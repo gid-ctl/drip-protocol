@@ -188,3 +188,29 @@
     (ok stream-id)
   )
 )
+
+;; Withdraw available (vested) funds from a stream
+(define-public (withdraw (stream-id uint))
+  (let (
+    (stream (unwrap! (map-get? streams stream-id) ERR-STREAM-NOT-FOUND))
+    (recipient (get recipient stream))
+    (withdrawn (get withdrawn stream))
+    (vested (calculate-vested-amount stream-id))
+    (available (- vested withdrawn))
+  )
+    ;; Only recipient can withdraw
+    (asserts! (is-eq tx-sender recipient) ERR-NOT-RECIPIENT)
+    ;; Stream must be active
+    (asserts! (get active stream) ERR-STREAM-NOT-ACTIVE)
+    ;; Must have funds to withdraw
+    (asserts! (> available u0) ERR-STREAM-DEPLETED)
+
+    ;; Transfer sBTC from contract to recipient (Clarity 4)
+    (try! (transfer-sbtc-from-escrow available recipient))
+
+    ;; Update withdrawn amount
+    (map-set streams stream-id (merge stream { withdrawn: vested }))
+
+    (ok available)
+  )
+)
