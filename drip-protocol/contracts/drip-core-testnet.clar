@@ -415,3 +415,18 @@
     )
   )
 )
+
+;; Get all streams where user is sender
+(define-read-only (get-outgoing-streams (user principal))
+  (default-to (list) (map-get? sender-streams user))
+)
+
+;; Get all streams where user is recipient
+(define-read-only (get-incoming-streams (user principal))
+  (default-to (list) (map-get? recipient-streams user))
+)
+
+;; Get total number of streams created
+(define-read-only (get-stream-count)
+  (var-get stream-nonce)
+)
