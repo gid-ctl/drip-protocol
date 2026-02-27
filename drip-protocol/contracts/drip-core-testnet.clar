@@ -333,3 +333,46 @@
     (ok available)
   )
 )
+
+;; Cancel an STX stream (sender only) - returns unvested funds to sender
+(define-public (cancel-stx-stream (stream-id uint))
+  (let (
+    (stream (unwrap! (map-get? stx-streams stream-id) ERR-STREAM-NOT-FOUND))
+    (sender (get sender stream))
+    (recipient (get recipient stream))
+    (total (get total-amount stream))
+    (withdrawn (get withdrawn stream))
+    (vested (calculate-stx-vested-amount stream-id))
+    (recipient-amount (- vested withdrawn))
+    (sender-refund (- total vested))
+  )
+    ;; Only sender can cancel
+    (asserts! (is-eq tx-sender sender) ERR-NOT-SENDER)
+    ;; Stream must be active
+    (asserts! (get active stream) ERR-STREAM-NOT-ACTIVE)
+
+    ;; Transfer remaining vested amount to recipient using Clarity 4 as-contract?
+    (if (> recipient-amount u0)
+      (try! (as-contract? ((with-stx recipient-amount))
+        (try! (stx-transfer? recipient-amount tx-sender recipient))
+      ))
+      true
+    )
+
+    ;; Refund unvested amount to sender using Clarity 4 as-contract?
+    (if (> sender-refund u0)
+      (try! (as-contract? ((with-stx sender-refund))
+        (try! (stx-transfer? sender-refund tx-sender sender))
+      ))
+      true
+    )
+
+    ;; Mark stream as inactive
+    (map-set stx-streams stream-id (merge stream { 
+      active: false,
+      withdrawn: vested
+    }))
+
+    (ok { recipient-received: recipient-amount, sender-refunded: sender-refund })
+  )
+)
