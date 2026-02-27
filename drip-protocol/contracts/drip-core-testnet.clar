@@ -214,3 +214,42 @@
     (ok available)
   )
 )
+
+;; Cancel a stream (sender only) - returns unvested funds to sender
+(define-public (cancel-stream (stream-id uint))
+  (let (
+    (stream (unwrap! (map-get? streams stream-id) ERR-STREAM-NOT-FOUND))
+    (sender (get sender stream))
+    (recipient (get recipient stream))
+    (total (get total-amount stream))
+    (withdrawn (get withdrawn stream))
+    (vested (calculate-vested-amount stream-id))
+    (recipient-amount (- vested withdrawn))
+    (sender-refund (- total vested))
+  )
+    ;; Only sender can cancel
+    (asserts! (is-eq tx-sender sender) ERR-NOT-SENDER)
+    ;; Stream must be active
+    (asserts! (get active stream) ERR-STREAM-NOT-ACTIVE)
+
+    ;; Transfer remaining vested amount to recipient
+    (if (> recipient-amount u0)
+      (try! (transfer-sbtc-from-escrow recipient-amount recipient))
+      true
+    )
+
+    ;; Refund unvested amount to sender
+    (if (> sender-refund u0)
+      (try! (transfer-sbtc-from-escrow sender-refund sender))
+      true
+    )
+
+    ;; Mark stream as inactive
+    (map-set streams stream-id (merge stream { 
+      active: false,
+      withdrawn: vested
+    }))
+
+    (ok { recipient-received: recipient-amount, sender-refunded: sender-refund })
+  )
+)
