@@ -1,0 +1,10 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background rounded square -->
+  <rect width="64" height="64" rx="14" fill="#F59E0B"/>
+  
+  <!-- Water droplet icon -->
+  <path d="M32 16C32 16 20 28 20 37C20 43.627 25.373 49 32 49C38.627 49 44 43.627 44 37C44 28 32 16 32 16Z" fill="#1F2937" stroke="#1F2937" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Inner highlight/shine effect -->
+  <path d="M28 32C28 32 26 35 26 37C26 39.209 27.791 41 30 41" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+</svg>
