@@ -124,7 +124,7 @@ export default function CreateStream() {
     return (
       <DashboardLayout>
         <div className="max-w-lg mx-auto space-y-6">
-          <NetworkAlert />
+          <NetworkAlert compact />
           <Card className="gradient-card border-border/50">
             <CardContent className="p-10 flex flex-col items-center text-center space-y-4">
               <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center">

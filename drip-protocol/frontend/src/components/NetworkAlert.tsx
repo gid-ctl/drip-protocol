@@ -1,58 +1,65 @@
 import { Info, AlertCircle, ExternalLink } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { NETWORK_STRING, TESTNET_FAUCET_URL } from "@/lib/stacks";
 import { Button } from "./ui/button";
+import { cn } from "@/lib/utils";
 
 interface NetworkAlertProps {
   className?: string;
+  compact?: boolean;
 }
 
-export function NetworkAlert({ className }: NetworkAlertProps) {
+export function NetworkAlert({ className, compact = false }: NetworkAlertProps) {
   const isTestnet = NETWORK_STRING === 'testnet';
   
   if (!isTestnet) {
     // Mainnet - show important warning
     return (
-      <Alert variant="destructive" className={className}>
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Mainnet Network Required</AlertTitle>
-        <AlertDescription>
-          This application is connected to the <strong>Stacks Mainnet</strong>. Make sure your wallet
-          is connected to Mainnet before creating or managing streams.
-        </AlertDescription>
-      </Alert>
+      <div className={cn(
+        "flex items-center justify-between gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3",
+        compact && "py-2",
+        className
+      )}>
+        <div className="flex items-center gap-3">
+          <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+            <p className="text-sm font-medium text-destructive">Mainnet Network</p>
+            <p className="text-xs text-muted-foreground">Connect your wallet to Mainnet</p>
+          </div>
+        </div>
+      </div>
     );
   }
   
   // Testnet - show informational message
   return (
-    <Alert className={className}>
-      <Info className="h-4 w-4" />
-      <AlertTitle>Testnet Mode</AlertTitle>
-      <AlertDescription className="space-y-3">
-        <p>
-          This application is connected to the <strong>Stacks Testnet</strong>. Please connect
-          your wallet to Testnet to use this application.
-        </p>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            asChild
-            className="text-xs"
-          >
-            <a 
-              href={TESTNET_FAUCET_URL} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="gap-1"
-            >
-              Get Testnet STX
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          </Button>
+    <div className={cn(
+      "flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3",
+      compact && "py-2",
+      className
+    )}>
+      <div className="flex items-center gap-3">
+        <Info className="h-4 w-4 text-primary flex-shrink-0" />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+          <p className="text-sm font-medium">Testnet Mode</p>
+          <p className="text-xs text-muted-foreground">Using Stacks Testnet</p>
         </div>
-      </AlertDescription>
-    </Alert>
+      </div>
+      <Button 
+        variant="outline" 
+        size="sm" 
+        asChild
+        className="text-xs h-8 flex-shrink-0"
+      >
+        <a 
+          href={TESTNET_FAUCET_URL} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="gap-1.5"
+        >
+          Get Testnet STX
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      </Button>
+    </div>
   );
 }
