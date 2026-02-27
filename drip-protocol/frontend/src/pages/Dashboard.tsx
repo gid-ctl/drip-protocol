@@ -4,6 +4,7 @@ import { StatsCards } from "@/components/dashboard/StatsCards";
 import { StatsCardsSkeleton } from "@/components/dashboard/StatsCardsSkeleton";
 import { StreamCard } from "@/components/StreamCard";
 import { StreamCardSkeleton } from "@/components/StreamCardSkeleton";
+import { NetworkAlert } from "@/components/NetworkAlert";
 import { Button } from "@/components/ui/button";
 import { Plus, Droplets, Wallet } from "lucide-react";
 import { useStreams } from "@/hooks/use-streams";
@@ -27,10 +28,11 @@ export default function Dashboard() {
   if (!connected) {
     return (
       <DashboardLayout>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-          <Wallet className="h-16 w-16 text-muted-foreground mb-6" />
-          <h1 className="text-2xl font-bold mb-2">Connect Your Wallet</h1>
-          <p className="text-muted-foreground max-w-md mb-6">
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
+          <NetworkAlert className="max-w-2xl" />
+          <Wallet className="h-16 w-16 text-muted-foreground" />
+          <h1 className="text-2xl font-bold">Connect Your Wallet</h1>
+          <p className="text-muted-foreground max-w-md">
             Connect your Stacks wallet to view your payment streams and start streaming sBTC.
           </p>
           <Button onClick={connectWallet} size="lg" className="gradient-primary">

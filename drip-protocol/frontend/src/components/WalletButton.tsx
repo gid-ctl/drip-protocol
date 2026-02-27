@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Wallet, ChevronDown, LogOut, Copy, Check, ExternalLink, RefreshCw, Loader2 } from "lucide-react";
+import { Wallet, ChevronDown, LogOut, Copy, Check, ExternalLink, RefreshCw, Loader2, Network } from "lucide-react";
 import { useWallet } from "@/contexts/WalletContext";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
-import { getExplorerAddressUrl } from "@/lib/stacks";
+import { getExplorerAddressUrl, NETWORK_STRING } from "@/lib/stacks";
 
 export function WalletButton() {
   const { 
@@ -60,6 +60,11 @@ export function WalletButton() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuLabel className="flex items-center gap-2 text-xs text-muted-foreground font-normal">
+            <Network className="h-3 w-3" />
+            <span className="uppercase">{NETWORK_STRING}</span>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
           <div className="px-2 py-2 text-sm">
             <div className="flex justify-between items-center mb-1">
               <span className="text-muted-foreground">STX Balance</span>

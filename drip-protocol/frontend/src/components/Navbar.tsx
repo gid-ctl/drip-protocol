@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Droplets, LayoutDashboard, PlusCircle, Clock, Settings, Menu } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import { ThemeToggle } from "./ThemeToggle";
+import { NetworkBadge } from "./NetworkBadge";
 import { cn } from "@/lib/utils";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
@@ -54,6 +55,7 @@ export function Navbar() {
 
           <div className="flex items-center gap-2">
             <div className="hidden md:flex items-center gap-2">
+              <NetworkBadge />
               <ThemeToggle />
               <WalletButton />
             </div>
@@ -108,6 +110,7 @@ export function Navbar() {
           <Separator />
 
           <div className="p-4 space-y-3">
+            <NetworkBadge className="w-full justify-center" />
             <WalletButton />
           </div>
 
