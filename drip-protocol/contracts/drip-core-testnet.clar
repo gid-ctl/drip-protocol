@@ -253,3 +253,83 @@
     (ok { recipient-received: recipient-amount, sender-refunded: sender-refund })
   )
 )
+
+;; ============================================
+;; STX Stream Public Functions
+;; ============================================
+
+;; Create a new STX payment stream
+(define-public (create-stx-stream 
+    (recipient principal) 
+    (total-amount uint) 
+    (duration-blocks uint)
+  )
+  (let (
+    (stream-id (var-get stx-stream-nonce))
+    (start-block stacks-block-height)
+    (end-block (+ stacks-block-height duration-blocks))
+    (sender tx-sender)
+  )
+    ;; Validate inputs
+    (asserts! (> total-amount u0) ERR-INVALID-AMOUNT)
+    (asserts! (> duration-blocks u0) ERR-INVALID-DURATION)
+
+    ;; Transfer STX from sender to this contract (escrow)
+    ;; Clarity 4: use current-contract keyword to get contract principal
+    (try! (stx-transfer? total-amount sender current-contract))
+
+    ;; Store stream data
+    (map-set stx-streams stream-id {
+      sender: sender,
+      recipient: recipient,
+      total-amount: total-amount,
+      withdrawn: u0,
+      start-block: start-block,
+      end-block: end-block,
+      active: true
+    })
+
+    ;; Update user indexes
+    (map-set stx-sender-streams sender 
+      (add-to-list stream-id (default-to (list) (map-get? stx-sender-streams sender)))
+    )
+    (map-set stx-recipient-streams recipient 
+      (add-to-list stream-id (default-to (list) (map-get? stx-recipient-streams recipient)))
+    )
+
+    ;; Increment nonce
+    (var-set stx-stream-nonce (+ stream-id u1))
+
+    ;; Return the stream ID
+    (ok stream-id)
+  )
+)
+
+;; Withdraw available (vested) STX from a stream
+(define-public (withdraw-stx (stream-id uint))
+  (let (
+    (stream (unwrap! (map-get? stx-streams stream-id) ERR-STREAM-NOT-FOUND))
+    (recipient (get recipient stream))
+    (withdrawn (get withdrawn stream))
+    (vested (calculate-stx-vested-amount stream-id))
+    (available (- vested withdrawn))
+  )
+    ;; Only recipient can withdraw
+    (asserts! (is-eq tx-sender recipient) ERR-NOT-RECIPIENT)
+    ;; Stream must be active
+    (asserts! (get active stream) ERR-STREAM-NOT-ACTIVE)
+    ;; Must have funds to withdraw
+    (asserts! (> available u0) ERR-STREAM-DEPLETED)
+
+    ;; Transfer STX from contract to recipient using Clarity 4 as-contract?
+    ;; Per Stacks docs: final body expression cannot return response, so use try! inside
+    (try! (as-contract? ((with-stx available))
+      (try! (stx-transfer? available tx-sender recipient))
+    ))
+
+    ;; Update withdrawn amount
+    (map-set stx-streams stream-id (merge stream { withdrawn: vested }))
+
+    (ok available)
+  )
+)
