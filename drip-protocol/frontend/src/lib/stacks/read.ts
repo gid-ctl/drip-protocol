@@ -51,6 +51,76 @@ export interface ParsedStream {
 }
 
 // ============================================
+// Rate Limiter - prevents 429 from Hiro API
+// ============================================
+
+const REQUEST_DELAY_MS = 150; // min ms between API calls
+const MAX_RETRIES = 3;
+const BACKOFF_BASE_MS = 1000;
+
+let lastRequestTime = 0;
+const requestQueue: Array<{
+  execute: () => Promise<unknown>;
+  resolve: (value: unknown) => void;
+  reject: (error: unknown) => void;
+}> = [];
+let processingQueue = false;
+
+async function processQueue() {
+  if (processingQueue) return;
+  processingQueue = true;
+
+  while (requestQueue.length > 0) {
+    const item = requestQueue.shift()!;
+    const now = Date.now();
+    const elapsed = now - lastRequestTime;
+    if (elapsed < REQUEST_DELAY_MS) {
+      await new Promise(r => setTimeout(r, REQUEST_DELAY_MS - elapsed));
+    }
+    lastRequestTime = Date.now();
+    try {
+      const result = await item.execute();
+      item.resolve(result);
+    } catch (err) {
+      item.reject(err);
+    }
+  }
+
+  processingQueue = false;
+}
+
+function enqueueRequest<T>(execute: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    requestQueue.push({
+      execute: execute as () => Promise<unknown>,
+      resolve: resolve as (value: unknown) => void,
+      reject,
+    });
+    processQueue();
+  });
+}
+
+async function fetchWithRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      const is429 = err instanceof Error && (
+        err.message.includes('429') || err.message.includes('Too Many')
+      );
+      if (is429 && attempt < MAX_RETRIES - 1) {
+        const delay = BACKOFF_BASE_MS * Math.pow(2, attempt);
+        console.warn(`[Rate limit] Retrying in ${delay}ms (attempt ${attempt + 1})`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
+// ============================================
 // Helper Functions
 // ============================================
 
@@ -160,26 +230,31 @@ function parseResponseNumber(cv: ClarityValue): number {
 
 /**
  * Call a read-only function on the drip-core contract
+ * Rate-limited and retried to avoid 429 errors from Hiro API
  */
 async function callReadOnly(
   functionName: string, 
   functionArgs: ClarityValue[], 
   senderAddress: string
 ): Promise<ClarityValue> {
-  try {
-    const result = await fetchCallReadOnlyFunction({
-      contractAddress: DRIP_CONTRACT.address,
-      contractName: DRIP_CONTRACT.name,
-      functionName,
-      functionArgs,
-      senderAddress,
-      network: NETWORK_STRING,
-    });
-    return result;
-  } catch (error) {
-    console.error(`[Contract] Error calling ${functionName}:`, error);
-    throw error;
-  }
+  return enqueueRequest(() =>
+    fetchWithRetry(async () => {
+      try {
+        const result = await fetchCallReadOnlyFunction({
+          contractAddress: DRIP_CONTRACT.address,
+          contractName: DRIP_CONTRACT.name,
+          functionName,
+          functionArgs,
+          senderAddress,
+          network: NETWORK_STRING,
+        });
+        return result;
+      } catch (error) {
+        console.error(`[Contract] Error calling ${functionName}:`, error);
+        throw error;
+      }
+    })
+  );
 }
 
 /**
@@ -382,6 +457,7 @@ export async function getFullStreamDetails(
 
 /**
  * Get all streams for a user (both incoming and outgoing) with full details
+ * Fetches sequentially to avoid 429 rate limits from Hiro API
  */
 export async function getAllUserStreams(userAddress: string): Promise<{
   outgoing: ParsedStream[];
@@ -393,11 +469,15 @@ export async function getAllUserStreams(userAddress: string): Promise<{
     getIncomingStreamIds(userAddress),
   ]);
 
-  // Fetch full details for all streams
-  const [outgoing, incoming] = await Promise.all([
-    Promise.all(outgoingIds.map(id => getFullStreamDetails(id, userAddress))),
-    Promise.all(incomingIds.map(id => getFullStreamDetails(id, userAddress))),
-  ]);
+  // Fetch details sequentially to avoid rate limits
+  const outgoing: (ParsedStream | null)[] = [];
+  for (const id of outgoingIds) {
+    outgoing.push(await getFullStreamDetails(id, userAddress));
+  }
+  const incoming: (ParsedStream | null)[] = [];
+  for (const id of incomingIds) {
+    incoming.push(await getFullStreamDetails(id, userAddress));
+  }
 
   return {
     outgoing: outgoing.filter((s): s is ParsedStream => s !== null),
@@ -654,6 +734,7 @@ export async function getFullStxStreamDetails(
 
 /**
  * Get all STX streams for a user (both incoming and outgoing) with full details
+ * Fetches sequentially to avoid 429 rate limits from Hiro API
  */
 export async function getAllUserStxStreams(userAddress: string): Promise<{
   outgoing: ParsedStream[];
@@ -665,11 +746,15 @@ export async function getAllUserStxStreams(userAddress: string): Promise<{
     getStxIncomingStreamIds(userAddress),
   ]);
 
-  // Fetch full details for all streams
-  const [outgoing, incoming] = await Promise.all([
-    Promise.all(outgoingIds.map(id => getFullStxStreamDetails(id, userAddress))),
-    Promise.all(incomingIds.map(id => getFullStxStreamDetails(id, userAddress))),
-  ]);
+  // Fetch details sequentially to avoid rate limits
+  const outgoing: (ParsedStream | null)[] = [];
+  for (const id of outgoingIds) {
+    outgoing.push(await getFullStxStreamDetails(id, userAddress));
+  }
+  const incoming: (ParsedStream | null)[] = [];
+  for (const id of incomingIds) {
+    incoming.push(await getFullStxStreamDetails(id, userAddress));
+  }
 
   return {
     outgoing: outgoing.filter((s): s is ParsedStream => s !== null),
