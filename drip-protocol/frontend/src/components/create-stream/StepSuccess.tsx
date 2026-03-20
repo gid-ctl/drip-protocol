@@ -26,12 +26,14 @@ export function StepSuccess({ form, txId }: Props) {
   const queryClient = useQueryClient();
   const { stxPrice, sbtcPrice } = usePrices();
   const values = form.getValues();
-  const { recipientAddress, amount, durationDays } = values;
+  const { recipientAddress, amount, durationDays, durationBlocks, durationMode } = values;
   const tokenType = (values.tokenType || "STX") as TokenTypeValue;
   const tokenSymbol = tokenType === "STX" ? "STX" : "sBTC";
   const usdRate = tokenType === "STX" ? stxPrice : sbtcPrice;
   const usdValue = amount * usdRate;
-  const endDate = addDays(new Date(), durationDays);
+  const isDemo = durationMode === 'blocks';
+  const effectiveDays = isDemo ? (durationBlocks || 10) / 144 : (durationDays || 30);
+  const endDate = addDays(new Date(), effectiveDays);
 
   const handleBackToDashboard = () => {
     // Invalidate all stream queries to force refetch on Dashboard/History
@@ -39,11 +41,15 @@ export function StepSuccess({ form, txId }: Props) {
     navigate("/dashboard");
   };
 
+  const durationDisplay = isDemo
+    ? `${durationBlocks || 10} blocks (~${(durationBlocks || 10) <= 10 ? `${(durationBlocks || 10) * 10}s` : `${Math.ceil((durationBlocks || 10) / 6)} min`})`
+    : `${durationDays} day${durationDays !== 1 ? "s" : ""}`;
+
   const rows = [
     { label: "Recipient", value: formatAddress(recipientAddress) },
     { label: "Amount", value: `${amount} ${tokenSymbol} (~$${usdValue.toLocaleString(undefined, { maximumFractionDigits: 2 })})` },
-    { label: "Duration", value: `${durationDays} day${durationDays !== 1 ? "s" : ""}` },
-    { label: "Est. End Date", value: format(endDate, "MMM d, yyyy") },
+    { label: "Duration", value: durationDisplay },
+    ...(isDemo ? [] : [{ label: "Est. End Date", value: format(endDate, "MMM d, yyyy") }]),
   ];
 
   return (
