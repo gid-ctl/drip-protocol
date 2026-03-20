@@ -21,8 +21,10 @@ import {
   type CreateStreamParams,
   type TxInfo,
   STREAM_POLL_INTERVAL,
+  DEMO_POLL_INTERVAL,
   satsToSbtc,
   blocksToDays,
+  formatBlocksRemaining,
   type TokenType,
   TOKEN_CONFIG,
 } from "@/lib/stacks";
@@ -44,6 +46,7 @@ export interface StreamWithMeta extends ParsedStream {
   remainingAmount: bigint;
   daysRemaining: number;
   daysTotal: number;
+  timeRemaining: string;
   isFullyVested: boolean;
 }
 
@@ -52,6 +55,10 @@ export interface StreamsState {
   incoming: StreamWithMeta[];
   totalStreaming: bigint;
   totalReceived: bigint;
+  totalStreamingStx: bigint;
+  totalStreamingSbtc: bigint;
+  totalReceivedStx: bigint;
+  totalReceivedSbtc: bigint;
   activeOutgoingCount: number;
   activeIncomingCount: number;
 }
@@ -74,12 +81,12 @@ export const streamQueryKeys = {
 /**
  * Hook to get current block height
  */
-export function useBlockHeight() {
+export function useBlockHeight(fastMode = false) {
   return useQuery({
     queryKey: streamQueryKeys.blockHeight,
     queryFn: getCurrentBlockHeight,
-    refetchInterval: 60000, // Refresh every 60 seconds
-    staleTime: 30000, // Consider fresh for 30 seconds
+    refetchInterval: fastMode ? DEMO_POLL_INTERVAL : 60000,
+    staleTime: fastMode ? 2000 : 30000,
     refetchOnWindowFocus: false,
   });
 }
@@ -125,9 +132,20 @@ export function useStreams() {
       }
     },
     enabled: connected && !!address,
-    refetchInterval: STREAM_POLL_INTERVAL,
-    staleTime: STREAM_POLL_INTERVAL / 2, // Don't refetch if data is still fresh
-    refetchOnWindowFocus: false, // Prevent refetch on tab switch
+    refetchInterval: (query) => {
+      // Adaptive polling: 5s for short demo streams, 30s otherwise
+      const data = query.state.data;
+      if (data) {
+        const allStreams = [...(data.outgoing || []), ...(data.incoming || [])];
+        const hasShort = allStreams.some(
+          (s: ParsedStream) => s.active && (s.endBlock - s.startBlock) < 50
+        );
+        if (hasShort) return DEMO_POLL_INTERVAL;
+      }
+      return STREAM_POLL_INTERVAL;
+    },
+    staleTime: DEMO_POLL_INTERVAL,
+    refetchOnWindowFocus: false,
   });
 
   // Transform streams with computed metadata
@@ -151,8 +169,8 @@ export function useStreams() {
     let status: StreamStatus;
     if (!stream.active) {
       // Stream has been cancelled or funds fully withdrawn
-      status = isFullyVested && stream.withdrawn >= stream.totalAmount ? 'completed' : 'cancelled';
-    } else if (isFullyVested && stream.withdrawn >= stream.totalAmount) {
+      status = isFullyVested ? 'completed' : 'cancelled';
+    } else if (isFullyVested) {
       status = 'completed';
     } else {
       status = 'active';
@@ -168,6 +186,7 @@ export function useStreams() {
       remainingAmount,
       daysRemaining: blocksToDays(remainingBlocks),
       daysTotal: blocksToDays(totalBlocks),
+      timeRemaining: formatBlocksRemaining(remainingBlocks),
       isFullyVested,
     };
   };
@@ -190,11 +209,33 @@ export function useStreams() {
     0n
   );
 
+  const totalStreamingStx = activeOutgoing.filter(s => s.tokenType === 'STX').reduce(
+    (sum, s) => sum + s.remainingAmount, 0n
+  );
+  const totalStreamingSbtc = activeOutgoing.filter(s => s.tokenType === 'sBTC').reduce(
+    (sum, s) => sum + s.remainingAmount, 0n
+  );
+  const totalReceivedStx = incoming.filter(s => s.tokenType === 'STX').reduce(
+    (sum, s) => sum + s.withdrawn, 0n
+  );
+  const totalReceivedSbtc = incoming.filter(s => s.tokenType === 'sBTC').reduce(
+    (sum, s) => sum + s.withdrawn, 0n
+  );
+
+  // Use faster polling if any stream is short (demo mode: < 50 blocks duration)
+  const hasShortStream = [...outgoing, ...incoming].some(
+    s => s.active && (s.endBlock - s.startBlock) < 50
+  );
+
   const streamsState: StreamsState = {
     outgoing,
     incoming,
     totalStreaming,
     totalReceived,
+    totalStreamingStx,
+    totalStreamingSbtc,
+    totalReceivedStx,
+    totalReceivedSbtc,
     activeOutgoingCount: activeOutgoing.length,
     activeIncomingCount: activeIncoming.length,
   };
@@ -203,6 +244,7 @@ export function useStreams() {
     ...query,
     streams: streamsState,
     currentBlock,
+    hasShortStream,
   };
 }
 
@@ -251,8 +293,8 @@ export function useStream(streamId: number) {
         // Determine stream status
         let status: StreamStatus;
         if (!s.active) {
-          status = isFullyVested && s.withdrawn >= s.totalAmount ? 'completed' : 'cancelled';
-        } else if (isFullyVested && s.withdrawn >= s.totalAmount) {
+          status = isFullyVested ? 'completed' : 'cancelled';
+        } else if (isFullyVested) {
           status = 'completed';
         } else {
           status = 'active';
@@ -268,6 +310,7 @@ export function useStream(streamId: number) {
           remainingAmount: s.totalAmount - vestedAmount,
           daysRemaining: blocksToDays(remainingBlocks),
           daysTotal: blocksToDays(totalBlocks),
+          timeRemaining: formatBlocksRemaining(remainingBlocks),
           isFullyVested,
         } as StreamWithMeta;
       })()
