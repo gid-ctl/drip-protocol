@@ -47,9 +47,10 @@ export default function CreateStream() {
     resolver: zodResolver(createStreamSchema),
     defaultValues: { 
       recipientAddress: "", 
-      tokenType: "STX", // Default to STX since users may not have sBTC
-      amount: "" as unknown as number, // Empty string prevents controlled/uncontrolled warning
-      durationDays: "" as unknown as number 
+      tokenType: "STX",
+      amount: "" as unknown as number,
+      durationDays: "" as unknown as number,
+      durationMode: "days" as const,
     },
     mode: "onTouched",
   });
@@ -76,10 +77,14 @@ export default function CreateStream() {
     const tokenSymbol = TOKEN_CONFIG[tokenType].symbol;
     
     try {
+      const durationBlocks = values.durationMode === 'blocks' && values.durationBlocks
+        ? values.durationBlocks
+        : daysToBlocks(values.durationDays || 30);
+
       const result = await createStream.mutateAsync({
         recipient: values.recipientAddress,
         amount: toSmallestUnit(values.amount, tokenType),
-        durationBlocks: daysToBlocks(values.durationDays),
+        durationBlocks,
         tokenType,
       });
       
