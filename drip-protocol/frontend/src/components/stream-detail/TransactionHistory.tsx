@@ -13,14 +13,15 @@ const typeConfig: Record<string, { label: string; className: string }> = {
 };
 
 interface Props {
-  streamId: string;
+  streamId: number | string;
   stream?: StreamWithMeta | null;
+  currentBlock?: number;
 }
 
-export function TransactionHistory({ streamId, stream }: Props) {
+export function TransactionHistory({ streamId, stream, currentBlock }: Props) {
   // For now, show a simplified view based on stream state
   // Full transaction history would require an indexer or querying contract events
-  const contractUrl = getExplorerAddressUrl(DRIP_CONTRACT);
+  const contractUrl = getExplorerAddressUrl(DRIP_CONTRACT.principal);
   
   const tokenType = stream?.tokenType || 'sBTC';
   const tokenSymbol = tokenType === 'STX' ? 'STX' : 'sBTC';
