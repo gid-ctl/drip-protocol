@@ -520,4 +520,506 @@ describe("DRIP Core Contract", () => {
       expect(result).toBeErr(Cl.uint(107));
     });
   });
+
+  // ============================================
+  // STX Stream Tests
+  // ============================================
+
+  describe("STX Stream Creation", () => {
+
+    it("should create an STX stream with valid parameters", () => {
+      const totalAmount = 5000000; // 5 STX
+      const durationBlocks = 100;
+
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(totalAmount), Cl.uint(durationBlocks)],
+        sender
+      );
+
+      expect(result).toBeOk(Cl.uint(0));
+    });
+
+    it("should reject STX stream with zero amount", () => {
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(0), Cl.uint(100)],
+        sender
+      );
+
+      expect(result).toBeErr(Cl.uint(103));
+    });
+
+    it("should reject STX stream with zero duration", () => {
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(5000000), Cl.uint(0)],
+        sender
+      );
+
+      expect(result).toBeErr(Cl.uint(104));
+    });
+
+    it("should increment STX stream count", () => {
+      simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(5000000), Cl.uint(100)],
+        sender
+      );
+
+      const { result } = simnet.callReadOnlyFn(
+        "drip-core",
+        "get-stx-stream-count",
+        [],
+        deployer
+      );
+
+      expect(result).toBeUint(1);
+    });
+  });
+
+  describe("STX Stream Queries", () => {
+
+    it("should return STX stream details", () => {
+      const totalAmount = 5000000;
+      const durationBlocks = 100;
+
+      simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(totalAmount), Cl.uint(durationBlocks)],
+        sender
+      );
+
+      const { result } = simnet.callReadOnlyFn(
+        "drip-core",
+        "get-stx-stream",
+        [Cl.uint(0)],
+        deployer
+      );
+
+      expect(result).toBeSome(
+        Cl.tuple({
+          sender: Cl.principal(sender),
+          recipient: Cl.principal(recipient),
+          "total-amount": Cl.uint(totalAmount),
+          withdrawn: Cl.uint(0),
+          "start-block": Cl.uint(simnet.blockHeight),
+          "end-block": Cl.uint(simnet.blockHeight + durationBlocks),
+          active: Cl.bool(true),
+        })
+      );
+    });
+
+    it("should track STX outgoing streams", () => {
+      simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(5000000), Cl.uint(100)],
+        sender
+      );
+
+      const { result } = simnet.callReadOnlyFn(
+        "drip-core",
+        "get-stx-outgoing-streams",
+        [Cl.principal(sender)],
+        deployer
+      );
+
+      expect(result).toBeList([Cl.uint(0)]);
+    });
+
+    it("should track STX incoming streams", () => {
+      simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(5000000), Cl.uint(100)],
+        sender
+      );
+
+      const { result } = simnet.callReadOnlyFn(
+        "drip-core",
+        "get-stx-incoming-streams",
+        [Cl.principal(recipient)],
+        deployer
+      );
+
+      expect(result).toBeList([Cl.uint(0)]);
+    });
+  });
+
+  describe("STX Vesting Calculations", () => {
+
+    it("should return 0 vested at start for STX stream", () => {
+      simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(5000000), Cl.uint(100)],
+        sender
+      );
+
+      const { result } = simnet.callReadOnlyFn(
+        "drip-core",
+        "get-stx-vested",
+        [Cl.uint(0)],
+        deployer
+      );
+
+      expect(result).toBeOk(Cl.uint(0));
+    });
+
+    it("should calculate linear vesting for STX mid-stream", () => {
+      const totalAmount = 1000000;
+      const durationBlocks = 100;
+
+      simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(totalAmount), Cl.uint(durationBlocks)],
+        sender
+      );
+
+      simnet.mineEmptyBlocks(50);
+
+      const { result } = simnet.callReadOnlyFn(
+        "drip-core",
+        "get-stx-vested",
+        [Cl.uint(0)],
+        deployer
+      );
+
+      expect(result).toBeOk(Cl.uint(500000));
+    });
+
+    it("should return full STX amount after stream ends", () => {
+      const totalAmount = 1000000;
+      const durationBlocks = 100;
+
+      simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(totalAmount), Cl.uint(durationBlocks)],
+        sender
+      );
+
+      simnet.mineEmptyBlocks(150);
+
+      const { result } = simnet.callReadOnlyFn(
+        "drip-core",
+        "get-stx-vested",
+        [Cl.uint(0)],
+        deployer
+      );
+
+      expect(result).toBeOk(Cl.uint(totalAmount));
+    });
+  });
+
+  describe("STX Withdrawals", () => {
+
+    it("should allow recipient to withdraw vested STX", () => {
+      simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(1000000), Cl.uint(100)],
+        sender
+      );
+
+      simnet.mineEmptyBlocks(50);
+
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "withdraw-stx",
+        [Cl.uint(0)],
+        recipient
+      );
+
+      // 51/100 * 1000000 = 510000
+      expect(result).toBeOk(Cl.uint(510000));
+    });
+
+    it("should reject STX withdrawal from non-recipient", () => {
+      simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(1000000), Cl.uint(100)],
+        sender
+      );
+
+      simnet.mineEmptyBlocks(50);
+
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "withdraw-stx",
+        [Cl.uint(0)],
+        unauthorized
+      );
+
+      expect(result).toBeErr(Cl.uint(105));
+    });
+  });
+
+  describe("STX Stream Cancellation", () => {
+
+    it("should allow sender to cancel STX stream", () => {
+      simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(1000000), Cl.uint(100)],
+        sender
+      );
+
+      simnet.mineEmptyBlocks(25);
+
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "cancel-stx-stream",
+        [Cl.uint(0)],
+        sender
+      );
+
+      // 26/100 * 1000000 = 260000 vested
+      expect(result).toBeOk(
+        Cl.tuple({
+          "recipient-received": Cl.uint(260000),
+          "sender-refunded": Cl.uint(740000),
+        })
+      );
+    });
+
+    it("should reject STX cancellation from non-sender", () => {
+      simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(1000000), Cl.uint(100)],
+        sender
+      );
+
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "cancel-stx-stream",
+        [Cl.uint(0)],
+        unauthorized
+      );
+
+      expect(result).toBeErr(Cl.uint(106));
+    });
+
+    it("should reject STX withdrawal from cancelled stream", () => {
+      simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(1000000), Cl.uint(100)],
+        sender
+      );
+
+      simnet.callPublicFn(
+        "drip-core",
+        "cancel-stx-stream",
+        [Cl.uint(0)],
+        sender
+      );
+
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "withdraw-stx",
+        [Cl.uint(0)],
+        recipient
+      );
+
+      expect(result).toBeErr(Cl.uint(107));
+    });
+  });
+
+  // ============================================
+  // New Feature Tests
+  // ============================================
+
+  describe("Emergency Pause", () => {
+
+    it("should allow owner to pause protocol", () => {
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "set-protocol-paused",
+        [Cl.bool(true)],
+        deployer
+      );
+
+      expect(result).toBeOk(Cl.bool(true));
+    });
+
+    it("should reject pause from non-owner", () => {
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "set-protocol-paused",
+        [Cl.bool(true)],
+        sender
+      );
+
+      expect(result).toBeErr(Cl.uint(100));
+    });
+
+    it("should block sBTC stream creation when paused", () => {
+      mintSbtc(sender, 2000000);
+
+      simnet.callPublicFn(
+        "drip-core",
+        "set-protocol-paused",
+        [Cl.bool(true)],
+        deployer
+      );
+
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "create-stream",
+        [Cl.principal(recipient), Cl.uint(1000000), Cl.uint(100)],
+        sender
+      );
+
+      expect(result).toBeErr(Cl.uint(110));
+    });
+
+    it("should block STX stream creation when paused", () => {
+      simnet.callPublicFn(
+        "drip-core",
+        "set-protocol-paused",
+        [Cl.bool(true)],
+        deployer
+      );
+
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(5000000), Cl.uint(100)],
+        sender
+      );
+
+      expect(result).toBeErr(Cl.uint(110));
+    });
+
+    it("should allow stream creation after unpause", () => {
+      mintSbtc(sender, 2000000);
+
+      // Pause
+      simnet.callPublicFn(
+        "drip-core",
+        "set-protocol-paused",
+        [Cl.bool(true)],
+        deployer
+      );
+
+      // Unpause
+      simnet.callPublicFn(
+        "drip-core",
+        "set-protocol-paused",
+        [Cl.bool(false)],
+        deployer
+      );
+
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "create-stream",
+        [Cl.principal(recipient), Cl.uint(1000000), Cl.uint(100)],
+        sender
+      );
+
+      expect(result).toBeOk(Cl.uint(0));
+    });
+
+    it("should report paused status via read-only", () => {
+      simnet.callPublicFn(
+        "drip-core",
+        "set-protocol-paused",
+        [Cl.bool(true)],
+        deployer
+      );
+
+      const { result } = simnet.callReadOnlyFn(
+        "drip-core",
+        "is-protocol-paused",
+        [],
+        deployer
+      );
+
+      expect(result).toBeBool(true);
+    });
+  });
+
+  describe("Self-Stream Prevention", () => {
+
+    it("should reject sBTC stream to self", () => {
+      mintSbtc(sender, 2000000);
+
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "create-stream",
+        [Cl.principal(sender), Cl.uint(1000000), Cl.uint(100)],
+        sender
+      );
+
+      expect(result).toBeErr(Cl.uint(111));
+    });
+
+    it("should reject STX stream to self", () => {
+      const { result } = simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(sender), Cl.uint(5000000), Cl.uint(100)],
+        sender
+      );
+
+      expect(result).toBeErr(Cl.uint(111));
+    });
+  });
+
+  describe("Protocol Stats", () => {
+
+    it("should track protocol stats after sBTC stream creation", () => {
+      mintSbtc(sender, 2000000);
+
+      simnet.callPublicFn(
+        "drip-core",
+        "create-stream",
+        [Cl.principal(recipient), Cl.uint(1000000), Cl.uint(100)],
+        sender
+      );
+
+      const { result } = simnet.callReadOnlyFn(
+        "drip-core",
+        "get-protocol-stats",
+        [],
+        deployer
+      );
+
+      const stats = (result as any).value;
+      expect(stats["total-sbtc-streamed"]).toEqual(Cl.uint(1000000));
+      expect(stats["total-streams-created"]).toEqual(Cl.uint(1));
+      expect(stats["sbtc-stream-count"]).toEqual(Cl.uint(1));
+    });
+
+    it("should track protocol stats after STX stream creation", () => {
+      simnet.callPublicFn(
+        "drip-core",
+        "create-stx-stream",
+        [Cl.principal(recipient), Cl.uint(5000000), Cl.uint(100)],
+        sender
+      );
+
+      const { result } = simnet.callReadOnlyFn(
+        "drip-core",
+        "get-protocol-stats",
+        [],
+        deployer
+      );
+
+      const stats = (result as any).value;
+      expect(stats["total-stx-streamed"]).toEqual(Cl.uint(5000000));
+      expect(stats["total-streams-created"]).toEqual(Cl.uint(1));
+      expect(stats["stx-stream-count"]).toEqual(Cl.uint(1));
+    });
+  });
 });
