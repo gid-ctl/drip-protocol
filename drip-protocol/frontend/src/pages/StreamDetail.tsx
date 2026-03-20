@@ -19,7 +19,7 @@ export default function StreamDetail() {
   const { id } = useParams();
   const { connected, connectWallet } = useWallet();
   const streamId = id ? parseInt(id, 10) : -1;
-  const { stream, isLoading, error } = useStream(streamId);
+  const { stream, isLoading, error, currentBlock } = useStream(streamId);
 
   if (!connected) {
     return (
@@ -96,7 +96,7 @@ export default function StreamDetail() {
           </div>
           <div className="space-y-6">
             <StreamActions stream={stream} />
-            <TransactionHistory streamId={stream.id} stream={stream} />
+            <TransactionHistory streamId={stream.id} stream={stream} currentBlock={currentBlock} />
           </div>
         </div>
       </div>
