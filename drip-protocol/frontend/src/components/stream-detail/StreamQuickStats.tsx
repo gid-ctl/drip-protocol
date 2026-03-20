@@ -20,7 +20,9 @@ export function StreamQuickStats({ stream }: Props) {
   const withdrawableAmount = fromSmallestUnit(stream.withdrawable, tokenType);
   const remainingAmount = fromSmallestUnit(stream.totalAmount - stream.vested, tokenType);
   const durationBlocks = stream.endBlock - stream.startBlock;
+  const isDemoStream = durationBlocks < 50;
   const dailyRate = durationBlocks > 0 ? fromSmallestUnit(stream.totalAmount, tokenType) / blocksToApproxDays(durationBlocks) : 0;
+  const perBlockRate = durationBlocks > 0 ? fromSmallestUnit(stream.totalAmount, tokenType) / durationBlocks : 0;
 
   const numericStats = [
     { label: "Vested", value: vestedAmount, decimals, suffix: ` ${tokenSymbol}` },
@@ -50,9 +52,9 @@ export function StreamQuickStats({ stream }: Props) {
             <p className="text-sm font-mono font-medium">{stream.timeRemaining}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Daily Rate</p>
+            <p className="text-xs text-muted-foreground">{isDemoStream ? 'Rate / Block' : 'Daily Rate'}</p>
             <p className="text-sm font-mono font-medium">
-              <AnimatedNumber value={dailyRate} decimals={tokenType === 'STX' ? 4 : 6} suffix={` ${tokenSymbol}`} duration={1000} />
+              <AnimatedNumber value={isDemoStream ? perBlockRate : dailyRate} decimals={tokenType === 'STX' ? 4 : 6} suffix={` ${tokenSymbol}`} duration={1000} />
             </p>
           </div>
         </div>
