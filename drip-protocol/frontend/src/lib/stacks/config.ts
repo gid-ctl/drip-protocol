@@ -16,8 +16,8 @@ export const API_BASE_URL = 'https://api.testnet.hiro.so';
 
 // DRIP Protocol contract (deployed on testnet)
 export const DRIP_CONTRACT = {
-  address: 'ST1SCQ368DK29NW9TFNJXX7HZM90QT9X5JVDKXQ99',
-  name: 'drip-core-testnet',
+  address: 'STHB047A30W99178TR7KE0784C2GV2206H98PPY',
+  name: 'drip-core',
   get principal() {
     return `${this.address}.${this.name}`;
   },
@@ -114,6 +114,21 @@ export function daysToBlocks(days: number): number {
   return Math.floor(days * BLOCKS_PER_DAY);
 }
 
+/**
+ * Format remaining blocks into a human-readable countdown string.
+ * Shows seconds/minutes for short streams (demo), days for longer ones.
+ */
+export function formatBlocksRemaining(blocks: number): string {
+  if (blocks <= 0) return 'Complete';
+  const seconds = blocks * 600; // ~10 min per block on mainnet
+  if (blocks <= 10) return `~${blocks} block${blocks === 1 ? '' : 's'}`;
+  if (seconds < 3600) return `~${Math.ceil(seconds / 60)} min`;
+  if (seconds < 86400) return `~${(seconds / 3600).toFixed(1)} hr`;
+  const days = seconds / 86400;
+  if (days < 1.5) return '~1 day';
+  return `~${Math.round(days)} days`;
+}
+
 // Address formatting
 export function formatAddress(address: string, prefixLen: number = 4, suffixLen: number = 4): string {
   if (!address || address.length <= prefixLen + suffixLen + 3) return address;
@@ -178,6 +193,7 @@ export function formatTokenAmount(amount: bigint | number, tokenType: TokenType)
 // Polling intervals (increased to avoid rate limiting)
 export const BALANCE_POLL_INTERVAL = 60000; // 60 seconds
 export const STREAM_POLL_INTERVAL = 30000;  // 30 seconds
+export const DEMO_POLL_INTERVAL = 10000;   // 10 seconds for short demo streams
 export const TX_POLL_INTERVAL = 5000;       // 5 seconds for pending tx
 export const TX_CONFIRMATION_TIMEOUT = 600000; // 10 minutes max wait
 
