@@ -2,15 +2,16 @@
  * DRIP Protocol - Read-Only Contract Functions
  * 
  * Functions for reading data from the drip-core contract.
- * Uses fetchCallReadOnlyFunction from @stacks/transactions.
+ * Uses custom API calls routed through Vercel proxy to avoid CORS.
  */
 
 import { 
-  fetchCallReadOnlyFunction, 
   Cl, 
   cvToValue,
   ClarityType,
   type ClarityValue,
+  serializeCV,
+  deserializeCV,
 } from '@stacks/transactions';
 import { 
   DRIP_CONTRACT, 
@@ -240,15 +241,24 @@ async function callReadOnly(
   return enqueueRequest(() =>
     fetchWithRetry(async () => {
       try {
-        const result = await fetchCallReadOnlyFunction({
-          contractAddress: DRIP_CONTRACT.address,
-          contractName: DRIP_CONTRACT.name,
-          functionName,
-          functionArgs,
-          senderAddress,
-          network: NETWORK_STRING,
+        const url = `${API_BASE_URL}/v2/contracts/call-read/${DRIP_CONTRACT.address}/${DRIP_CONTRACT.name}/${functionName}`;
+        const body = {
+          sender: senderAddress,
+          arguments: functionArgs.map(arg => serializeCV(arg)),
+        };
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
         });
-        return result;
+        if (!response.ok) {
+          throw new Error(`${response.status} ${response.statusText}`);
+        }
+        const data = await response.json();
+        if (!data.okay || !data.result) {
+          throw new Error(data.cause || 'Contract call failed');
+        }
+        return deserializeCV(data.result);
       } catch (error) {
         console.error(`[Contract] Error calling ${functionName}:`, error);
         throw error;

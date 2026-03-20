@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/hiro/:path*",
+      "destination": "https://api.testnet.hiro.so/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

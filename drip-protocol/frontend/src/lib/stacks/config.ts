@@ -11,8 +11,9 @@ import { STACKS_TESTNET } from '@stacks/network';
 export const NETWORK = STACKS_TESTNET;
 export const NETWORK_STRING = 'testnet' as const;
 
-// API endpoints
-export const API_BASE_URL = 'https://api.testnet.hiro.so';
+// API endpoints — use Vercel proxy in production to avoid CORS issues
+const isProduction = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+export const API_BASE_URL = isProduction ? '/api/hiro' : 'https://api.testnet.hiro.so';
 
 // DRIP Protocol contract (deployed on testnet)
 export const DRIP_CONTRACT = {
