@@ -27,13 +27,28 @@ export const durationSchema = z.object({
     .number({ invalid_type_error: "Enter a valid duration" })
     .int("Duration must be a whole number")
     .min(1, "Choose a duration between 1 and 365 days")
-    .max(365, "Choose a duration between 1 and 365 days"),
+    .max(365, "Choose a duration between 1 and 365 days")
+    .optional(),
+  durationBlocks: z
+    .number({ invalid_type_error: "Enter a valid block count" })
+    .int("Block count must be a whole number")
+    .min(1, "At least 1 block")
+    .max(52560, "Max ~365 days")
+    .optional(),
+  durationMode: z.enum(['days', 'blocks']).default('days'),
 });
 
 export const createStreamSchema = recipientSchema
   .merge(tokenSchema)
   .merge(amountSchema)
-  .merge(durationSchema);
+  .merge(durationSchema)
+  .refine(
+    (data) => {
+      if (data.durationMode === 'days') return data.durationDays !== undefined && data.durationDays >= 1;
+      return data.durationBlocks !== undefined && data.durationBlocks >= 1;
+    },
+    { message: "Enter a valid duration", path: ["durationDays"] }
+  );
 
 export type RecipientFormValues = z.infer<typeof recipientSchema>;
 export type TokenFormValues = z.infer<typeof tokenSchema>;
