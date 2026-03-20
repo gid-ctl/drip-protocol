@@ -27,6 +27,7 @@ export {
   blocksToDays,
   blocksToApproxDays,
   daysToBlocks,
+  formatBlocksRemaining,
   // Formatting
   SBTC_DECIMALS,
   satsToSbtc,
@@ -46,6 +47,7 @@ export {
   // Polling intervals
   BALANCE_POLL_INTERVAL,
   STREAM_POLL_INTERVAL,
+  DEMO_POLL_INTERVAL,
   TX_POLL_INTERVAL,
   TX_CONFIRMATION_TIMEOUT,
   MAX_TX_TRACK_ATTEMPTS,
