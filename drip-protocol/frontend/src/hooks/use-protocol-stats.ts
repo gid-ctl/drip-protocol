@@ -22,7 +22,7 @@ export interface ProtocolStats {
 
 // Use a valid testnet address (ST prefix) for read-only calls
 // This is the contract deployer address - any valid testnet address works
-const DUMMY_ADDRESS = 'ST1SCQ368DK29NW9TFNJXX7HZM90QT9X5JVDKXQ99';
+const DUMMY_ADDRESS = 'STHB047A30W99178TR7KE0784C2GV2206H98PPY';
 
 /**
  * Fetch protocol-wide statistics from the drip-core contract
