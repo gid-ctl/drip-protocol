@@ -1,8 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/api/hiro/:path*",
-      "destination": "https://api.testnet.hiro.so/:path*"
+      "source": "/api/hiro/(.*)",
+      "destination": "https://api.testnet.hiro.so/$1"
     },
     {
       "source": "/(.*)",
