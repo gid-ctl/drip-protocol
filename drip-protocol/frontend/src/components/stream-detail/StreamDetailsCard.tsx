@@ -26,7 +26,7 @@ export function StreamDetailsCard({ stream }: Props) {
     { label: "Sender", value: formatAddress(stream.sender), mono: true },
     { label: "Recipient", value: formatAddress(stream.recipient), mono: true },
     { label: "Total Amount", value: `${totalAmount.toFixed(decimals)} ${tokenSymbol}` },
-    { label: "Duration", value: `~${durationDays.toFixed(0)} days (${durationBlocks} blocks)` },
+    { label: "Duration", value: durationBlocks < 50 ? `${durationBlocks} blocks` : `~${durationDays.toFixed(0)} days (${durationBlocks} blocks)` },
     { label: "Start Block", value: stream.startBlock.toLocaleString() },
     { label: "End Block", value: stream.endBlock.toLocaleString() },
   ];
