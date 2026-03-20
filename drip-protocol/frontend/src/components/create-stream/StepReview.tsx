@@ -35,23 +35,42 @@ export function StepReview({ form, isSubmitting, onConfirmSubmit }: Props) {
   const tokenConfig = TOKEN_CONFIG[tokenType];
   const tokenSymbol = tokenConfig.symbol;
   
-  const dailyRate = values.amount / values.durationDays;
+  const isDemo = values.durationMode === 'blocks';
+  const effectiveBlocks = isDemo
+    ? (values.durationBlocks || 10)
+    : ((values.durationDays || 30) * BLOCKS_PER_DAY);
+  const effectiveDays = isDemo
+    ? effectiveBlocks / BLOCKS_PER_DAY
+    : (values.durationDays || 30);
+  const dailyRate = effectiveDays > 0 ? values.amount / effectiveDays : 0;
   const startDate = new Date();
-  const endDate = addDays(startDate, values.durationDays);
+  const endDate = addDays(startDate, effectiveDays);
   
   // Calculate USD value based on token type with real prices
   const usdRate = tokenType === "STX" ? stxPrice : sbtcPrice;
   const usd = (values.amount * usdRate).toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+  const durationDisplay = isDemo
+    ? `${effectiveBlocks} blocks (~${effectiveBlocks <= 10 ? `${effectiveBlocks * 10}s` : `${Math.ceil(effectiveBlocks / 6)} min`})`
+    : `${effectiveDays} days (${effectiveBlocks.toLocaleString()} blocks)`;
+
+  const rateDisplay = isDemo
+    ? `${(values.amount / effectiveBlocks).toFixed(tokenType === "STX" ? 6 : 8)} ${tokenSymbol}/block`
+    : `${dailyRate.toFixed(tokenType === "STX" ? 4 : 6)} ${tokenSymbol}/day`;
 
   const rows = [
     { label: "From", value: address ? formatAddress(address) : "—", mono: true },
     { label: "To", value: formatAddress(values.recipientAddress), mono: true },
     { label: "Token", value: `${tokenConfig.icon} ${tokenSymbol}` },
     { label: "Amount", value: `${values.amount} ${tokenSymbol} (${usd})` },
-    { label: "Duration", value: `${values.durationDays} days (${(values.durationDays * BLOCKS_PER_DAY).toLocaleString()} blocks)` },
-    { label: "Rate", value: `${dailyRate.toFixed(tokenType === "STX" ? 4 : 6)} ${tokenSymbol}/day` },
-    { label: "Start", value: format(startDate, "MMM d, yyyy") },
-    { label: "End (est.)", value: format(endDate, "MMM d, yyyy") },
+    { label: "Duration", value: durationDisplay },
+    { label: "Rate", value: rateDisplay },
+    ...(isDemo ? [
+      { label: "Mode", value: "⚡ Demo (fast blocks)" },
+    ] : [
+      { label: "Start", value: format(startDate, "MMM d, yyyy") },
+      { label: "End (est.)", value: format(endDate, "MMM d, yyyy") },
+    ]),
   ];
 
   const feeUsd = formatSmallUsd(MOCK_FEE * stxPrice);
