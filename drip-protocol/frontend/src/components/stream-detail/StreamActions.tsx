@@ -81,7 +81,7 @@ export function StreamActions({ stream }: Props) {
     }
   };
 
-  if (stream.status !== "active" && stream.withdrawableAmount <= 0n) return null;
+  if (stream.status !== "active" && stream.status !== "claimable" && stream.withdrawableAmount <= 0n) return null;
 
   return (
     <div className="flex flex-col gap-3">

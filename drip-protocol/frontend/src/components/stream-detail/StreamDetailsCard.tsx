@@ -5,6 +5,7 @@ import type { StreamWithMeta } from "@/hooks/use-streams";
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   active: { label: "Active", className: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+  claimable: { label: "Claimable", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
   completed: { label: "Completed", className: "bg-success/20 text-success border-success/30" },
   cancelled: { label: "Cancelled", className: "bg-destructive/20 text-destructive border-destructive/30" },
 };

@@ -11,9 +11,8 @@ import { STACKS_TESTNET } from '@stacks/network';
 export const NETWORK = STACKS_TESTNET;
 export const NETWORK_STRING = 'testnet' as const;
 
-// API endpoints — use Vercel proxy in production to avoid CORS issues
-const isProduction = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
-export const API_BASE_URL = isProduction ? '/api/hiro' : 'https://api.testnet.hiro.so';
+// API endpoints
+export const API_BASE_URL = 'https://api.testnet.hiro.so';
 
 // DRIP Protocol contract (deployed on testnet)
 export const DRIP_CONTRACT = {
@@ -193,8 +192,8 @@ export function formatTokenAmount(amount: bigint | number, tokenType: TokenType)
 
 // Polling intervals (increased to avoid rate limiting)
 export const BALANCE_POLL_INTERVAL = 60000; // 60 seconds
-export const STREAM_POLL_INTERVAL = 30000;  // 30 seconds
-export const DEMO_POLL_INTERVAL = 10000;   // 10 seconds for short demo streams
+export const STREAM_POLL_INTERVAL = 60000;  // 60 seconds
+export const DEMO_POLL_INTERVAL = 15000;   // 15 seconds for short demo streams
 export const TX_POLL_INTERVAL = 5000;       // 5 seconds for pending tx
 export const TX_CONFIRMATION_TIMEOUT = 600000; // 10 minutes max wait
 

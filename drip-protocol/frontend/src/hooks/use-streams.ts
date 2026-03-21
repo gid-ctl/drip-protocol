@@ -34,7 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 // Types
 // ============================================
 
-export type StreamStatus = 'active' | 'completed' | 'cancelled';
+export type StreamStatus = 'active' | 'claimable' | 'completed' | 'cancelled';
 
 export interface StreamWithMeta extends ParsedStream {
   // Computed display values
@@ -85,8 +85,8 @@ export function useBlockHeight(fastMode = false) {
   return useQuery({
     queryKey: streamQueryKeys.blockHeight,
     queryFn: getCurrentBlockHeight,
-    refetchInterval: fastMode ? DEMO_POLL_INTERVAL : 60000,
-    staleTime: fastMode ? 2000 : 30000,
+    refetchInterval: fastMode ? DEMO_POLL_INTERVAL : 120000,
+    staleTime: fastMode ? 10000 : 60000,
     refetchOnWindowFocus: false,
   });
 }
@@ -144,8 +144,10 @@ export function useStreams() {
       }
       return STREAM_POLL_INTERVAL;
     },
-    staleTime: DEMO_POLL_INTERVAL,
+    staleTime: DEMO_POLL_INTERVAL / 2,
     refetchOnWindowFocus: false,
+    retry: 2,
+    retryDelay: 3000,
   });
 
   // Transform streams with computed metadata
@@ -171,7 +173,8 @@ export function useStreams() {
       // Stream has been cancelled or funds fully withdrawn
       status = isFullyVested ? 'completed' : 'cancelled';
     } else if (isFullyVested) {
-      status = 'completed';
+      // Fully vested but recipient hasn't withdrawn all funds yet
+      status = stream.withdrawn >= stream.totalAmount ? 'completed' : 'claimable';
     } else {
       status = 'active';
     }
@@ -295,7 +298,7 @@ export function useStream(streamId: number) {
         if (!s.active) {
           status = isFullyVested ? 'completed' : 'cancelled';
         } else if (isFullyVested) {
-          status = 'completed';
+          status = s.withdrawn >= s.totalAmount ? 'completed' : 'claimable';
         } else {
           status = 'active';
         }

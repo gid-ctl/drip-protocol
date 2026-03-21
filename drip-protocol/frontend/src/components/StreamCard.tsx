@@ -14,6 +14,7 @@ import { fromSmallestUnit, formatAddress, explorerTxUrl } from "@/lib/stacks";
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   active: { label: "Active", className: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+  claimable: { label: "Claimable", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
   completed: { label: "Completed", className: "bg-success/20 text-success border-success/30" },
   cancelled: { label: "Cancelled", className: "bg-destructive/20 text-destructive border-destructive/30" },
 };
@@ -135,7 +136,7 @@ export function StreamCard({ stream }: Props) {
         >
           <div
             className={`h-full rounded-full transition-all duration-500 ${
-              stream.status === "active" ? "gradient-primary" : stream.status === "completed" ? "bg-success" : "bg-destructive/60"
+              stream.status === "active" ? "gradient-primary" : (stream.status === "completed" || stream.status === "claimable") ? "bg-success" : "bg-destructive/60"
             }`}
             style={{ width: `${progress}%` }}
           />
@@ -172,7 +173,7 @@ export function StreamCard({ stream }: Props) {
               Details
             </Link>
           </Button>
-          {stream.status === "active" && isOutgoing && (
+          {(stream.status === "active" || stream.status === "claimable") && isOutgoing && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm" className="flex-1" disabled={cancelStream.isPending}>
@@ -195,7 +196,7 @@ export function StreamCard({ stream }: Props) {
               </AlertDialogContent>
             </AlertDialog>
           )}
-          {stream.status === "active" && !isOutgoing && withdrawableAmount > 0 && (
+          {(stream.status === "active" || stream.status === "claimable") && !isOutgoing && withdrawableAmount > 0 && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button size="sm" className="flex-1" disabled={withdraw.isPending}>

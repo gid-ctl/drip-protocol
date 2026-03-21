@@ -34,7 +34,7 @@ export function StreamProgress({ stream }: Props) {
       >
         <div
           className={`h-full rounded-full transition-all duration-700 ${
-            stream.status === "active" ? "gradient-primary" : stream.status === "completed" ? "bg-success" : "bg-destructive/60"
+            stream.status === "active" ? "gradient-primary" : (stream.status === "completed" || stream.status === "claimable") ? "bg-success" : "bg-destructive/60"
           }`}
           style={{ width: `${progress}%` }}
         />

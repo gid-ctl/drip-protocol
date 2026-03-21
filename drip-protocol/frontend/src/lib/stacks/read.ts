@@ -2,16 +2,15 @@
  * DRIP Protocol - Read-Only Contract Functions
  * 
  * Functions for reading data from the drip-core contract.
- * Uses custom API calls routed through Vercel proxy to avoid CORS.
+ * Uses fetchCallReadOnlyFunction from @stacks/transactions.
  */
 
 import { 
+  fetchCallReadOnlyFunction, 
   Cl, 
   cvToValue,
   ClarityType,
   type ClarityValue,
-  serializeCV,
-  deserializeCV,
 } from '@stacks/transactions';
 import { 
   DRIP_CONTRACT, 
@@ -55,9 +54,9 @@ export interface ParsedStream {
 // Rate Limiter - prevents 429 from Hiro API
 // ============================================
 
-const REQUEST_DELAY_MS = 150; // min ms between API calls
-const MAX_RETRIES = 3;
-const BACKOFF_BASE_MS = 1000;
+const REQUEST_DELAY_MS = 500; // min ms between API calls
+const MAX_RETRIES = 5;
+const BACKOFF_BASE_MS = 2500;
 
 let lastRequestTime = 0;
 const requestQueue: Array<{
@@ -106,12 +105,16 @@ async function fetchWithRetry<T>(fn: () => Promise<T>): Promise<T> {
     try {
       return await fn();
     } catch (err: unknown) {
-      const is429 = err instanceof Error && (
-        err.message.includes('429') || err.message.includes('Too Many')
+      const isRetryable = err instanceof Error && (
+        err.message.includes('429') ||
+        err.message.includes('Too Many') ||
+        err.message.includes('Failed to fetch') ||
+        err.message.includes('NetworkError') ||
+        err.message.includes('CORS')
       );
-      if (is429 && attempt < MAX_RETRIES - 1) {
+      if (isRetryable && attempt < MAX_RETRIES - 1) {
         const delay = BACKOFF_BASE_MS * Math.pow(2, attempt);
-        console.warn(`[Rate limit] Retrying in ${delay}ms (attempt ${attempt + 1})`);
+        console.warn(`[Rate limit] Retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
         await new Promise(r => setTimeout(r, delay));
         continue;
       }
@@ -119,6 +122,68 @@ async function fetchWithRetry<T>(fn: () => Promise<T>): Promise<T> {
     }
   }
   throw new Error('Max retries exceeded');
+}
+
+// ============================================
+// In-Memory Cache (avoids duplicate calls within a short window)
+// ============================================
+
+const responseCache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_TTL_MS = 8000; // 8 seconds
+
+function getCached<T>(key: string): T | undefined {
+  const entry = responseCache.get(key);
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL_MS) {
+    return entry.data as T;
+  }
+  responseCache.delete(key);
+  return undefined;
+}
+
+function setCache(key: string, data: unknown): void {
+  responseCache.set(key, { data, timestamp: Date.now() });
+  // Prune old entries periodically
+  if (responseCache.size > 200) {
+    const now = Date.now();
+    for (const [k, v] of responseCache) {
+      if (now - v.timestamp > CACHE_TTL_MS) responseCache.delete(k);
+    }
+  }
+}
+
+// ============================================
+// Local Vesting Computation (avoids 3 extra contract calls per stream)
+// ============================================
+
+let cachedBlockHeight = 0;
+let blockHeightTimestamp = 0;
+const BLOCK_HEIGHT_CACHE_MS = 15000;
+
+async function getCachedBlockHeight(): Promise<number> {
+  if (cachedBlockHeight > 0 && Date.now() - blockHeightTimestamp < BLOCK_HEIGHT_CACHE_MS) {
+    return cachedBlockHeight;
+  }
+  cachedBlockHeight = await getCurrentBlockHeight();
+  blockHeightTimestamp = Date.now();
+  return cachedBlockHeight;
+}
+
+function computeVesting(stream: StreamData, currentBlock: number): {
+  vested: bigint;
+  withdrawable: bigint;
+  progress: number;
+} {
+  const totalBlocks = stream.endBlock - stream.startBlock;
+  if (totalBlocks <= 0) {
+    return { vested: stream.totalAmount, withdrawable: stream.totalAmount - stream.withdrawn, progress: 100 };
+  }
+  
+  const elapsed = Math.max(0, Math.min(currentBlock - stream.startBlock, totalBlocks));
+  const vested = stream.totalAmount * BigInt(elapsed) / BigInt(totalBlocks);
+  const withdrawable = vested > stream.withdrawn ? vested - stream.withdrawn : 0n;
+  const progress = Math.min(100, Math.round((elapsed / totalBlocks) * 100));
+  
+  return { vested, withdrawable, progress };
 }
 
 // ============================================
@@ -238,27 +303,26 @@ async function callReadOnly(
   functionArgs: ClarityValue[], 
   senderAddress: string
 ): Promise<ClarityValue> {
+  // Check in-memory cache first
+  const cacheKey = `${functionName}:${functionArgs.map(a => cvToValue(a)).join(',')}:${senderAddress}`;
+  const cached = getCached<ClarityValue>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   return enqueueRequest(() =>
     fetchWithRetry(async () => {
       try {
-        const url = `${API_BASE_URL}/v2/contracts/call-read/${DRIP_CONTRACT.address}/${DRIP_CONTRACT.name}/${functionName}`;
-        const body = {
-          sender: senderAddress,
-          arguments: functionArgs.map(arg => serializeCV(arg)),
-        };
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+        const result = await fetchCallReadOnlyFunction({
+          contractAddress: DRIP_CONTRACT.address,
+          contractName: DRIP_CONTRACT.name,
+          functionName,
+          functionArgs,
+          senderAddress,
+          network: NETWORK_STRING,
         });
-        if (!response.ok) {
-          throw new Error(`${response.status} ${response.statusText}`);
-        }
-        const data = await response.json();
-        if (!data.okay || !data.result) {
-          throw new Error(data.cause || 'Contract call failed');
-        }
-        return deserializeCV(data.result);
+        setCache(cacheKey, result);
+        return result;
       } catch (error) {
         console.error(`[Contract] Error calling ${functionName}:`, error);
         throw error;
@@ -441,19 +505,20 @@ export async function getStreamCount(
 
 /**
  * Get full stream details with computed fields
+ * Uses only 1 contract call (get-stream) and computes vested/withdrawable/progress locally
  */
 export async function getFullStreamDetails(
   streamId: number,
   senderAddress: string
 ): Promise<ParsedStream | null> {
-  const [stream, vested, withdrawable, progress] = await Promise.all([
+  const [stream, currentBlock] = await Promise.all([
     getStream(streamId, senderAddress),
-    getVested(streamId, senderAddress),
-    getWithdrawable(streamId, senderAddress),
-    getStreamProgress(streamId, senderAddress),
+    getCachedBlockHeight(),
   ]);
 
   if (!stream) return null;
+
+  const { vested, withdrawable, progress } = computeVesting(stream, currentBlock);
 
   return {
     id: streamId,
@@ -500,11 +565,26 @@ export async function getAllUserStreams(userAddress: string): Promise<{
 // ============================================
 
 /**
+ * Rate-limited fetch wrapper for any Hiro API call
+ */
+function rateLimitedFetch(url: string, options?: RequestInit): Promise<Response> {
+  return enqueueRequest(() =>
+    fetchWithRetry(async () => {
+      const response = await fetch(url, options);
+      if (response.status === 429) {
+        throw new Error('429 Too Many Requests');
+      }
+      return response;
+    })
+  );
+}
+
+/**
  * Get sBTC balance for an address using Hiro API
  */
 export async function getSbtcBalance(address: string): Promise<bigint> {
   try {
-    const response = await fetch(
+    const response = await rateLimitedFetch(
       `${API_BASE_URL}/extended/v1/address/${address}/balances`
     );
     
@@ -535,7 +615,7 @@ export async function getSbtcBalance(address: string): Promise<bigint> {
  */
 export async function getStxBalance(address: string): Promise<bigint> {
   try {
-    const response = await fetch(
+    const response = await rateLimitedFetch(
       `${API_BASE_URL}/extended/v1/address/${address}/stx`
     );
     
@@ -553,18 +633,35 @@ export async function getStxBalance(address: string): Promise<bigint> {
 }
 
 /**
- * Get both STX and sBTC balances
+ * Get both STX and sBTC balances in a single API call
  */
 export async function getBalances(address: string): Promise<{
   stx: bigint;
   sbtc: bigint;
 }> {
-  const [stx, sbtc] = await Promise.all([
-    getStxBalance(address),
-    getSbtcBalance(address),
-  ]);
-  
-  return { stx, sbtc };
+  try {
+    const response = await rateLimitedFetch(
+      `${API_BASE_URL}/extended/v1/address/${address}/balances`
+    );
+    
+    if (!response.ok) {
+      console.warn('Failed to fetch balances:', response.status);
+      return { stx: 0n, sbtc: 0n };
+    }
+    
+    const data = await response.json();
+    
+    const stx = BigInt(data.stx?.balance || '0');
+    
+    const sbtcKey = `${SBTC_CONTRACT.principal}::${SBTC_CONTRACT.assetName}`;
+    const sbtcBalance = data.fungible_tokens?.[sbtcKey]?.balance;
+    const sbtc = sbtcBalance ? BigInt(sbtcBalance) : 0n;
+    
+    return { stx, sbtc };
+  } catch (error) {
+    console.error('Error fetching balances:', error);
+    return { stx: 0n, sbtc: 0n };
+  }
 }
 
 /**
@@ -572,7 +669,7 @@ export async function getBalances(address: string): Promise<{
  */
 export async function getCurrentBlockHeight(): Promise<number> {
   try {
-    const response = await fetch(`${API_BASE_URL}/v2/info`);
+    const response = await rateLimitedFetch(`${API_BASE_URL}/v2/info`);
     
     if (!response.ok) {
       console.warn('Failed to fetch block height:', response.status);
@@ -718,19 +815,20 @@ export async function getStxStreamCount(
 
 /**
  * Get full STX stream details with computed fields
+ * Uses only 1 contract call (get-stx-stream) and computes vested/withdrawable/progress locally
  */
 export async function getFullStxStreamDetails(
   streamId: number,
   senderAddress: string
 ): Promise<ParsedStream | null> {
-  const [stream, vested, withdrawable, progress] = await Promise.all([
+  const [stream, currentBlock] = await Promise.all([
     getStxStream(streamId, senderAddress),
-    getStxVested(streamId, senderAddress),
-    getStxWithdrawable(streamId, senderAddress),
-    getStxStreamProgress(streamId, senderAddress),
+    getCachedBlockHeight(),
   ]);
 
   if (!stream) return null;
+
+  const { vested, withdrawable, progress } = computeVesting(stream, currentBlock);
 
   return {
     id: streamId,
